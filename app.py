@@ -254,6 +254,36 @@ def signin():
     except Exception as e:
         return ({"message": str(e)})
 
+@app.route("/signin-without-otp", methods=["POST"])
+def signin_no_otp():
+    try:
+        data = request.json
+        username = data["username"]
+        password = data["password"]
+        q = db.execute(f'''
+        SELECT * FROM user WHERE username = '{username}';  
+        ''')
+        data = q.mappings()
+        # print(data)
+        user = None
+        for value in data:
+            user = value
+        if user:
+            if user['password'] == hash_password(password):
+                token = jwt.encode({
+                    'user_id': user['id'],
+                    'exp': datetime.utcnow() + timedelta(minutes=60)
+                }, app.config['SECRET_KEY'])
+                return jsonify({'access_token': token})
+            else:
+                raise Exception(
+                    f'Username atau password salah')
+        else:
+            raise Exception(
+                f'Username atau password salah')
+    except Exception as e:
+        return ({"message": str(e)})
+
 
 @app.route("/verify-otp", methods=['GET'])
 def verify_otp():
