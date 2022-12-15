@@ -322,7 +322,7 @@ def get_zonasi():
             'username':'riandyhsn',
             'password': 'password'
         }
-        response_login =  requests.get(PARTNER_API+'/signin-without-otp', headers=headers, data=data)
+        response_login =  requests.post(PARTNER_API+'/signin-without-otp', headers=headers, json=data)
         token = response_login.json()['access_token']
         for k in kelurahan:
             q = db.execute(f'''SELECT * FROM penduduk_2017 WHERE nama_kelurahan = '{k}' ''')
