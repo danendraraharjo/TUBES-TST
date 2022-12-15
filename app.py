@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template, redirect
 from database import db
 from flask_mail import Mail, Message
 import pyotp
@@ -59,6 +59,21 @@ def hash_password(password):
     hashed_password = sha256.hexdigest()
     return hashed_password
 
+@app.route("/")
+def index():
+  return render_template("index.html")
+
+@app.route("/register")
+def register():
+  return render_template("signup.html")
+
+@app.route("/otp")
+def otp():
+  return render_template("otp.html")
+
+@app.route("/user-input")
+def user_input():
+  return render_template("userinput.html")
 
 @app.route("/get-all-penduduk", methods=["GET"])
 @token_required
@@ -196,7 +211,7 @@ def editDataPenduduk():
 @app.route("/signup", methods=["POST"])
 def signup():
     try:
-        data = request.json
+        data = request.form
         email = data["email"]
         username = data["username"]
         password = data["password"]
@@ -217,13 +232,13 @@ def signup():
     except Exception as e:
         print(e)
         return ({"message": str(e)})
-    return jsonify({"message": f"Berhasil signup"})
+    return redirect('/')
 
 
 @app.route("/signin", methods=["POST"])
 def signin():
     try:
-        data = request.json
+        data = request.form
         username = data["username"]
         password = data["password"]
         q = db.execute(f'''
@@ -237,14 +252,14 @@ def signin():
         if user:
             if user['password'] == hash_password(password):
                 msg = Message(
-                    'Smart Education - Highschool Recommendation',
+                    'Smart Education - Zonasi System Recommendation',
                     sender=app.config['MAIL_USERNAME'],
                     recipients=[user['email']]
                 )
                 user_otp = totp.now()
                 msg.body = f'Kode OTP Anda adalah: {user_otp}. Mohon untuk tidak berikan Kode OTP Anda ke siapapun! Kode ini akan berlaku selama 10 menit.'
                 mail.send(msg)
-                return jsonify({"message": "Silahkan memasukkan OTP yang telah dikirim"})
+                return redirect('/otp')
             else:
                 raise Exception(
                     f'Username atau password salah')
@@ -285,10 +300,10 @@ def signin_no_otp():
         return ({"message": str(e)})
 
 
-@app.route("/verify-otp", methods=['GET'])
+@app.route("/verify-otp", methods=['GET', 'POST'])
 def verify_otp():
     
-    data = request.json
+    data = request.form
     username = data["username"]
     otp = data["otp"]
     q = db.execute(f'''SELECT * FROM user WHERE username = '{username}';  ''') 
@@ -304,13 +319,13 @@ def verify_otp():
             'user_id': user['id'],
             'exp': datetime.utcnow() + timedelta(minutes=60)
         }, app.config['SECRET_KEY'])
-        return jsonify({'access_token': token})
+        return redirect('/user-input')
     return (jsonify({'error': 'OTP Salah.'}), 401)
 
-@app.route("/get-zonasi", methods=["GET"])
+@app.route("/get-zonasi", methods=["GET", "POST"])
 def get_zonasi():
-    kelurahan1 = request.args.get("kelurahan1")
-    kelurahan2 = request.args.get("kelurahan2")
+    kelurahan1 = request.form["kelurahan1"]
+    kelurahan2 = request.form["kelurahan2"]
     kelurahan = [kelurahan1,kelurahan2]
     res = []
     try:
@@ -347,10 +362,10 @@ def get_zonasi():
             })
     except:
         return (jsonify({'error': 'Kesalahan server'}), 500)
-    if float(res['data'][0]) - float(res['data'][1]) > 0.2:
+    if Fraction(res[0]['keketatan']) - Fraction(res[1]['keketatan']) > 0.2:
         analisis = 'Siswa di kelurahan 1 sebaiknya memiliki keuntungan zonasi yang sama dengan siswa di kelurahan 2'
-    elif float(res['data'][1]) - float(res['data'][0]) > 0.2:
+    elif Fraction(res[1]['keketatan']) - Fraction(res[0]['keketatan']) > 0.2:
         analisis = 'Siswa di kelurahan 2 sebaiknya memiliki keuntungan zonasi yang sama dengan siswa di kelurahan 1'
     else:
         analisis = 'Sistem zonasi sudah optimal'
-    return jsonify({'data': res, 'analisis': analisis})
+    return render_template('recommendation.html', kelurahan=res, analisis=analisis)
