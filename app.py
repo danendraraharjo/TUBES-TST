@@ -23,7 +23,7 @@ mail = Mail(app)
 totp = pyotp.TOTP('MEVKEPQSFBWVKE5IFXLMFN6OBUCJAJAV', interval=600)
 
 
-PARTNER_API = 'http://127.0.0.1:8080'
+PARTNER_API = 'http://20.249.62.34'
 
 
 def token_required(f):
@@ -284,6 +284,16 @@ def get_zonasi():
     kelurahan = [kelurahan1,kelurahan2]
     res = []
     try:
+        headers = {
+            'accept': 'application/json',
+            'Content-Type': 'application/json',
+        }
+        data = {
+            'username':'riandyhsn',
+            'password': 'password'
+        }
+        response_login =  requests.get(PARTNER_API+'/signin-without-otp', headers=headers, data=data)
+        token = response_login.json()['access_token']
         for k in kelurahan:
             q = db.execute(f'''SELECT * FROM penduduk_2017 WHERE nama_kelurahan = '{k}' ''')
             total_penduduk = 0
@@ -294,7 +304,7 @@ def get_zonasi():
             headers = {
                 'accept': 'application/json',
                 'Content-Type': 'application/json',
-                'Authorization': 'Bearer '
+                'Authorization': 'Bearer ' + token
             }
             params = '/get-sma?kel=' + k
             response =  requests.get(PARTNER_API+params, headers=headers)
@@ -307,4 +317,10 @@ def get_zonasi():
             })
     except:
         return (jsonify({'error': 'Kesalahan server'}), 500)
-    return jsonify({'data': res, 'analisis': 'Ezzz deckk'})
+    if float(res['data'][0]) - float(res['data'][1]) > 0.2:
+        analisis = 'Siswa di kelurahan 1 sebaiknya memiliki keuntungan zonasi yang sama dengan siswa di kelurahan 2'
+    elif float(res['data'][1]) - float(res['data'][0]) > 0.2:
+        analisis = 'Siswa di kelurahan 2 sebaiknya memiliki keuntungan zonasi yang sama dengan siswa di kelurahan 1'
+    else:
+        analisis = 'Sistem zonasi sudah optimal'
+    return jsonify({'data': res, 'analisis': analisis})
