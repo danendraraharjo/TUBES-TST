@@ -1,18 +1,15 @@
 # Module Imports
-import mariadb
-import sys
+import pymysql
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+
+SQLALCHEMY_DATABASE_URL = 'mysql+pymysql://root:<{"YxZHxesj*Hk7)@34.101.54.133:3306/tst_daned'
+
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL
+)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Connect to MariaDB Platform
-db = None
-try:
-    db = mariadb.connect(
-        user="root",
-        password="",
-        host="localhost",
-        port=3306,
-        database="database_tst"
-
-    )
-except mariadb.Error as e:
-    print(f"Error connecting to MariaDB Platform: {e}")
-    sys.exit(1)
+db = SessionLocal()

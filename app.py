@@ -6,6 +6,8 @@ import hashlib
 import jwt
 from datetime import datetime, timedelta
 from functools import wraps
+import requests
+from fractions import Fraction
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = '3LiJVokKUuqYc1XVapGUPAaA22KiLSNp'
@@ -21,6 +23,9 @@ mail = Mail(app)
 totp = pyotp.TOTP('MEVKEPQSFBWVKE5IFXLMFN6OBUCJAJAV', interval=600)
 
 
+PARTNER_API = 'http://127.0.0.1:8080'
+
+
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -34,18 +39,14 @@ def token_required(f):
             token = token.replace('Bearer ', '')
             data = jwt.decode(
                 token, app.config['SECRET_KEY'], algorithms=['HS256'])
-            cur = db.cursor()
-            cur.execute(
+            
+            q = db.execute(
                 f'''SELECT * FROM user WHERE id = {data['user_id']};  ''')
-            columns = cur.description
-            data = cur.fetchall()
+            data = q.mappings()
+            # print(data)
             user = None
             for value in data:
-                tmp = {}
-                for (index, column) in enumerate(value):
-                    tmp[columns[index][0]] = column
-                user = tmp
-                break
+                user = value
         except:
             return jsonify({'error': 'Token invalid!'}), 401
         return f(user, *args, **kwargs)
@@ -64,59 +65,47 @@ def hash_password(password):
 def get_all_penduduk(user):
     if not user:
         return jsonify({"message": "Silahkan login terlebih dahulu"}), 401
-    cur = db.cursor()
-    cur.execute("SELECT * FROM penduduk_2017")
-    data = cur.fetchall()
-    columns = cur.description
+    
+    data = db.execute("SELECT * FROM penduduk_2017")
+    data = data.mappings()
     result = []
     for value in data:
-        tmp = {}
-        for (index, column) in enumerate(value):
-            tmp[columns[index][0]] = column
-        result.append(tmp)
+        result.append(dict(value))
     return jsonify(result)
 
 
 @ app.route("/get-kecamatan", methods=["GET"])
 def get_kecamatan():
-    cur = db.cursor()
+    
     kecamatan = request.args.get("nama_kecamatan")
-    cur.execute(f'''
+    data = db.execute(f'''
     SELECT * FROM penduduk_2017 WHERE nama_kecamatan = '{kecamatan}';
     ''')
-    columns = cur.description
-    data = cur.fetchall()
+    data = data.mappings()
     result = []
     for value in data:
-        tmp = {}
-        for (index, column) in enumerate(value):
-            tmp[columns[index][0]] = column
-        result.append(tmp)
+        result.append(dict(value))
     return jsonify(result)
 
 
 @ app.route("/get-kelurahan", methods=["GET"])
 def get_kelurahan():
-    cur = db.cursor()
+    
     kelurahan = request.args.get("nama_kelurahan")
-    cur.execute(f'''
+    data = db.execute(f'''
     SELECT * FROM penduduk_2017 WHERE nama_kelurahan = '{kelurahan}';
     ''')
-    columns = cur.description
-    data = cur.fetchall()
+    data = data.mappings()
     result = []
     for value in data:
-        tmp = {}
-        for (index, column) in enumerate(value):
-            tmp[columns[index][0]] = column
-        result.append(tmp)
+        result.append(dict(value))
     return jsonify(result)
 
 
 @app.route("/add-penduduk", methods=["POST"])
 def addDataPenduduk():
     try:
-        cur = db.cursor()
+        
         data = request.json
         id = data["id"]
         jenis_kelamin = data["jenis_kelamin"]
@@ -127,12 +116,12 @@ def addDataPenduduk():
         nama_provinsi = data["nama_provinsi"]
         tahun = data["tahun"]
         usia = data["usia"]
-        cur.execute(f'''
+        q = db.execute(f'''
         SELECT * FROM penduduk_2017 WHERE id = {id};  
         ''')
-        check_data = cur.fetchall()
+        check_data = q.all()
         if len(check_data) == 0:
-            cur.execute(f'''
+            db.execute(f'''
         INSERT INTO penduduk_2017 
         (id, jenis_kelamin, jumlah_penduduk, nama_kabupaten_kota, nama_kecamatan, nama_kelurahan, nama_provinsi, tahun, usia)
         VALUES ({id},'{jenis_kelamin}', {jumlah_penduduk}, '{nama_kabupaten_kota}', '{nama_kecamatan}', '{nama_kelurahan}', '{nama_provinsi}', {tahun}, '{usia}');  
@@ -150,14 +139,14 @@ def addDataPenduduk():
 @app.route("/delete-penduduk", methods=["DELETE"])
 def deleteDataPenduduk():
     try:
-        cur = db.cursor()
+        
         id = request.args.get("id")
-        cur.execute(f'''
+        q = db.execute(f'''
         SELECT * FROM penduduk_2017 WHERE id = '{id}';  
         ''')
-        check_data = cur.fetchall()
+        check_data = q.all()
         if len(check_data) == 1:
-            cur.execute(f'''
+            db.execute(f'''
             DELETE FROM penduduk_2017 
             WHERE id = '{id}';  
             ''')
@@ -173,7 +162,6 @@ def deleteDataPenduduk():
 @app.route("/edit-penduduk", methods=["PUT"])
 def editDataPenduduk():
     try:
-        cur = db.cursor()
         data = request.json
         req_id = data["id"]
         jenis_kelamin = data["jenis_kelamin"]
@@ -184,12 +172,12 @@ def editDataPenduduk():
         nama_provinsi = data["nama_provinsi"]
         tahun = data["tahun"]
         usia = data["usia"]
-        cur.execute(f'''
+        q = db.execute(f'''
         SELECT * FROM penduduk_2017 WHERE id = {req_id};  
         ''')
-        check_data = cur.fetchall()
+        check_data = q.all()
         if len(check_data) == 1:
-            cur.execute(f'''
+            q = db.execute(f'''
         UPDATE penduduk_2017
         SET jenis_kelamin = '{jenis_kelamin}', jumlah_penduduk = {jumlah_penduduk}, nama_kabupaten_kota = '{nama_kabupaten_kota}', nama_kecamatan = '{nama_kecamatan}', 
         nama_kelurahan = '{nama_kelurahan}', nama_provinsi = '{nama_provinsi}', tahun = {tahun}, usia = '{usia}'
@@ -208,17 +196,16 @@ def editDataPenduduk():
 @app.route("/signup", methods=["POST"])
 def signup():
     try:
-        cur = db.cursor()
         data = request.json
         email = data["email"]
         username = data["username"]
         password = data["password"]
-        cur.execute(f'''
+        q = db.execute(f'''
         SELECT * FROM user WHERE username = '{username}' or email = '{email}';  
         ''')
-        check_data = cur.fetchall()
+        check_data = q.all()
         if len(check_data) == 0:
-            cur.execute(f'''
+            db.execute(f'''
         INSERT INTO user
         (email, username, password)
         VALUES ('{email}', '{username}', '{hash_password(password)}');  
@@ -236,22 +223,17 @@ def signup():
 @app.route("/signin", methods=["POST"])
 def signin():
     try:
-        cur = db.cursor()
         data = request.json
         username = data["username"]
         password = data["password"]
-        cur.execute(f'''
+        q = db.execute(f'''
         SELECT * FROM user WHERE username = '{username}';  
         ''')
-        columns = cur.description
-        data = cur.fetchall()
+        data = q.mappings()
+        # print(data)
         user = None
         for value in data:
-            tmp = {}
-            for (index, column) in enumerate(value):
-                tmp[columns[index][0]] = column
-            user = tmp
-            break
+            user = value
         if user:
             if user['password'] == hash_password(password):
                 msg = Message(
@@ -270,26 +252,21 @@ def signin():
             raise Exception(
                 f'Username atau password salah')
     except Exception as e:
-        print(e)
         return ({"message": str(e)})
 
 
 @app.route("/verify-otp", methods=['GET'])
 def verify_otp():
-    cur = db.cursor()
+    
     data = request.json
     username = data["username"]
     otp = data["otp"]
-    cur.execute(f'''SELECT * FROM user WHERE username = '{username}';  ''')
-    columns = cur.description
-    data = cur.fetchall()
+    q = db.execute(f'''SELECT * FROM user WHERE username = '{username}';  ''') 
+    data = q.mappings()
+    # print(data)
     user = None
     for value in data:
-        tmp = {}
-        for (index, column) in enumerate(value):
-            tmp[columns[index][0]] = column
-        user = tmp
-        break
+        user = value
     if not user:
         return (jsonify({'error': 'Akun tidak ada.'}), 401)
     if totp.verify(otp):
@@ -299,3 +276,35 @@ def verify_otp():
         }, app.config['SECRET_KEY'])
         return jsonify({'access_token': token})
     return (jsonify({'error': 'OTP Salah.'}), 401)
+
+@app.route("/get-zonasi", methods=["GET"])
+def get_zonasi():
+    kelurahan1 = request.args.get("kelurahan1")
+    kelurahan2 = request.args.get("kelurahan2")
+    kelurahan = [kelurahan1,kelurahan2]
+    res = []
+    try:
+        for k in kelurahan:
+            q = db.execute(f'''SELECT * FROM penduduk_2017 WHERE nama_kelurahan = '{k}' ''')
+            total_penduduk = 0
+            data_kel = q.mappings()
+            for _ in data_kel:
+                if _['usia'] == '15-19':
+                    total_penduduk += _['jumlah_penduduk']
+            headers = {
+                'accept': 'application/json',
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer '
+            }
+            params = '/get-sma?kel=' + k
+            response =  requests.get(PARTNER_API+params, headers=headers)
+            total_siswa = 0
+            for _ in response.json():
+                total_siswa += _['jumlah_siswa']
+            res.append({
+                'kelurahan': k,
+                'keketatan': str(Fraction(total_siswa, total_penduduk))
+            })
+    except:
+        return (jsonify({'error': 'Kesalahan server'}), 500)
+    return jsonify({'data': res, 'analisis': 'Ezzz deckk'})
